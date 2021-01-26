@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: fl-volume
+  labels:
+    type: local
+spec:
+  storageClassName: fl-volume
+  capacity:
+    storage: 300Mi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/mnt/data_influxdb"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fl-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: influxdb
+  ports:
+    - protocol: TCP
+      port: 8086
+      targetPort: 8086
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fl-claim
+spec:
+  storageClassName: fl-volume
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 300Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: influxdb
+spec:
+  selector:
+    matchLabels:
+      app: influxdb
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: influxdb
+    spec:
+      volumes:
+        - name: fl-volume
+          persistentVolumeClaim:
+            claimName: fl-claim
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+      containers:
+        - name: influxdb
+          image: influxdb_image
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8086
+          volumeMounts:
+            - name: fl-volume
+              mountPath: /var/lib/influxdb
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
